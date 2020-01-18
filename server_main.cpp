@@ -18,37 +18,63 @@ int Counter = 0;
 using client = tuple<unsigned int, string, string>;
 
 vector<client> TableClients;
+string salt = "GlTl";
 
-string applyHash(string incomingValue){
+void make_digest(char *md5str, const unsigned char *digest, int len) /* {{{ */
+{
+ static const char hexits[17] = "0123456789abcdef";
+ int i;
+
+ for (i = 0; i < len; i++) {
+  md5str[i * 2]       = hexits[digest[i] >> 4];
+  md5str[(i * 2) + 1] = hexits[digest[i] &  0x0F];
+ }
+ md5str[len * 2] = '\0';
+}
+
+string applyHash(string& incomingValue){
     MD2_CTX context;
     //vector<unsigned char> retHash;
     //string retHash;
-    string retHash(17, ' ');
+
+    char *Hash;
+    char md2str[33];
+    md2str[0] = '\0';
+    string retHash(16, ' ');
     unsigned char digest[16];
     unsigned int len = incomingValue.size();
 
     MD2Init(&context);
     MD2Update(&context, (unsigned char*)incomingValue.c_str(), len);
     MD2Final(digest, &context);
+    //MD2Final(retHash.c_str(), &context);
 
-    for (int i = 0; i < 16; ++i)
+    /*for (int i = 0; i < 16; ++i)
         retHash[i] = digest[i];
     retHash[17] = '\0';
-    return retHash;
+    return retHash;*/
+
+    make_digest(md2str, digest, 16);
+    Hash = md2str;
+    return string(Hash);
 }
+
 
 bool addClient (string fname, string ClientLogin, string ClientPasswd, unsigned int clientID){
     ofstream out;
     out.open(fname, ios_base::app);
     if (out.is_open()){
-        //print
-        out << clientID << ' ' << ClientLogin << ' ' << ClientPasswd << endl;
+        //print\
+
+        string outStr = to_string(clientID) + ' ' + ClientLogin + ' ' + ClientPasswd + '\n';
+        out << outStr;
+        //out << clientID << ' ' << ClientLogin << ' ' << ClientPasswd << endl;
     }
     out.close();
     return !out.is_open();
 }
 
-bool CheckClient (client incomingClient){
+bool CheckClient (client incomingClient, int variant){
 
     string checkingLogin, checkingPasswd;
     unsigned int checkingID;
@@ -66,8 +92,19 @@ bool CheckClient (client incomingClient){
 
         std::tie(icheckingID, icheckingLogin, icheckingPasswd) = incomingClient;
 
-        string hashedIncomingPass = applyHash(icheckingPasswd);
-        cout << checkingPasswd;
+        if  (variant = 1){
+            string hashedIncomingPass = applyHash(icheckingPasswd);
+            cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
+            cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
+        }
+
+        if (variant = 2){
+            icheckingPasswd = icheckingPasswd + salt;
+            string hashedIncomingPass = applyHash(icheckingPasswd);
+            cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
+            cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
+        }
+
 
         if ((checkingID == icheckingID) and (checkingLogin == icheckingLogin) and (checkingPasswd == hashedIncomingPass)){
             cout << checkingLogin << " connected!" << endl;
@@ -81,9 +118,10 @@ bool CheckClient (client incomingClient){
 
 void ClientHandler(int index) {
 	int msg_size;
-	while(true) {
+	int ret;
+	do {
 
-        recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
+        ret = recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 		char *cID = new char[msg_size + 1];
 		cID[msg_size] = '\0';
 		recv(Connections[index], cID, msg_size, NULL);
@@ -98,15 +136,19 @@ void ClientHandler(int index) {
 		cPasswd[msg_size] = '\0';
 		recv(Connections[index], cPasswd, msg_size, NULL);
 
-		if  (CheckClient(make_tuple(index, cLogin, cPasswd))){
+
+		int id = atoi(cID);
+
+		if  (CheckClient(make_tuple(id, cLogin, cPasswd))){
             send(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 			char *msg = new char[msg_size + 1];
 			msg[msg_size] = '\0';
 			msg = "Client connected!";
-			send(Connections[index], msg, msg_size, NULL);
+			ret = send(Connections[index], msg, msg_size, NULL);
 
 			cout << "Client " << cLogin << " connected!" << endl;
 			delete[] msg;
+			//break;
 
 		} else {
             string msg = "Wrong login or password!";
@@ -130,29 +172,53 @@ void ClientHandler(int index) {
 		delete[] cPasswd;
 
 
-	}
+	} while (ret > 0);
+	//closesocket(Connections[index]);
+	//Counter--;
 }
 
-void loadBase(){
+void loadBase(string fname){
    fstream in;
-   in.open("Base.txt");
+   in.open(fname);
 
    unsigned int id;
-   string login, passwd(16, ' ');
+   string login, passwd/*(16, ' ')*/;
 
    while(!in.eof()){
-        in >> id >> login;
         char c;
-        for (int i = 0; i < 16; ++i){
+        in >> id >> login >> passwd;
+        //cout << c;
+        /*for (int i = 0; i < 16; ++i){
             in >> c;
             passwd[i] = c;
-        }
+        }*/
 
-        cout << id << ' ' << login << ' ' << passwd << endl;
+        //cout << id << ' ' << login << ' ' << passwd << endl;
         TableClients.emplace_back(make_tuple(id, login, passwd));
    }
 
    in.close();
+
+   //cout << TableClients.size();
+}
+
+void algorithmVar(int& variant){
+    switch (variant){
+
+    case 1:{
+        loadBase("BaseHash.txt");
+
+    }
+    case 2:{
+        loadBase("BaseSalt.txt")
+    }
+
+    case 3:{
+        loadBase("BaseLamp.txt")
+    }
+    }
+
+
 }
 
 int main(int argc, char* argv[]) {
@@ -173,14 +239,10 @@ int main(int argc, char* argv[]) {
         string ans = applyHash(passwd);
         string ans1 = applyHash(passwd);
 
-        if (ans == ans1){
-            cout << "DA BLYAT!" << endl;
-        }
-
         addClient("Base.txt", login, ans, clientID);
 	}   else {
 
-        loadBase();
+        loadBase("Base.txt");
         cout << "Base loading!" << endl;
 
         //WSAStartup
@@ -202,11 +264,12 @@ int main(int argc, char* argv[]) {
         listen(sListen, SOMAXCONN);
 
         SOCKET newConnection;
-        for(int i = 0; i < maxConnections; i++) {
+        while(Counter < maxConnections + 1) {
             newConnection = accept(sListen, (SOCKADDR*)&addr, &sizeofaddr);
 
             if(newConnection == 0) {
                 std::cout << "Error #2\n";
+                break;
             } else {
                 std::cout << "Client check started!\n";
                 //std::string msg = "Hello. It`s my first network program!";
@@ -214,14 +277,17 @@ int main(int argc, char* argv[]) {
                 //send(newConnection, (char*)&msg_size, sizeof(int), NULL);
                 //send(newConnection, msg.c_str(), msg_size, NULL);
 
-                Connections[i] = newConnection;
+                Connections[Counter] = newConnection;
                 Counter++;
-                CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, (LPVOID)(i), NULL, NULL);
+                CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, (LPVOID)(Counter-1), NULL, NULL);
+                //Counter--;
+                cout << "Connections: " << Counter << endl;
             }
         }
-
-
-        system("pause");
-        return 0;
 	}
+
+	WSACleanup();
+
+    system("pause");
+    return 0;
 }

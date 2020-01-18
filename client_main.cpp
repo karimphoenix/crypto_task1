@@ -9,31 +9,53 @@ SOCKET Connection;
 
 using namespace std;
 
-string applyHash(string incomingValue){
+void make_digest(char *md5str, const unsigned char *digest, int len) /* {{{ */
+{
+ static const char hexits[17] = "0123456789abcdef";
+ int i;
+
+ for (i = 0; i < len; i++) {
+  md5str[i * 2]       = hexits[digest[i] >> 4];
+  md5str[(i * 2) + 1] = hexits[digest[i] &  0x0F];
+ }
+ md5str[len * 2] = '\0';
+}
+
+string applyHash(string& incomingValue){
     MD2_CTX context;
     //vector<unsigned char> retHash;
     //string retHash;
-    string retHash(17, ' ');
+
+    char *Hash;
+    char md2str[33];
+    md2str[0] = '\0';
+    string retHash(16, ' ');
     unsigned char digest[16];
     unsigned int len = incomingValue.size();
 
     MD2Init(&context);
     MD2Update(&context, (unsigned char*)incomingValue.c_str(), len);
     MD2Final(digest, &context);
+    //MD2Final(retHash.c_str(), &context);
 
-    for (int i = 0; i < 16; ++i)
+    /*for (int i = 0; i < 16; ++i)
         retHash[i] = digest[i];
     retHash[17] = '\0';
-    return retHash;
+    return retHash;*/
+
+    make_digest(md2str, digest, 16);
+    Hash = md2str;
+    return string(Hash);
 }
 
 void ClientHandler() {
 	int msg_size;
-	while(true) {
+	int ret;
+	while(ret) {
 		recv(Connection, (char*)&msg_size, sizeof(int), NULL);
 		char *msg = new char[msg_size + 1];
 		msg[msg_size] = '\0';
-		recv(Connection, msg, msg_size, NULL);
+		ret = recv(Connection, msg, msg_size, NULL);
 		std::cout << msg << std::endl;
 		delete[] msg;
 	}
@@ -51,7 +73,8 @@ int main(int argc, char* argv[]) {
     login = argv[2];
     passwd = argv[3];
 
-    passwd = applyHash(passwd);
+    string sendingPasswd;
+    sendingPasswd = applyHash(passwd);
 
 	//WSAStartup
 	WSAData wsaData;
@@ -77,11 +100,13 @@ int main(int argc, char* argv[]) {
 	CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, NULL, NULL, NULL);
 
 	std::string msg1;
-	while(true) {
+	int ret;
+	do {
 		//std::getline(std::cin, msg1);
-		int msg_size = sizeof(id);
+        sid = to_string(id);
+        cout << sid << ' ';
+		int msg_size = sizeof(sid);
 		send(Connection, (char*)&msg_size, sizeof(int), NULL);
-		sid = to_string(id);
 		send(Connection, sid.c_str(), msg_size, NULL);
 		Sleep(1);
 
@@ -90,12 +115,17 @@ int main(int argc, char* argv[]) {
 		send(Connection, login.c_str(), msg_size, NULL);
 		Sleep(1);
 
-		msg_size = passwd.size();
-        cout << passwd;
+		msg_size = sendingPasswd.size();
+        cout << sendingPasswd << endl;
 		send(Connection, (char*)&msg_size, sizeof(int), NULL);
-		send(Connection, passwd.c_str(), msg_size, NULL);
+		ret = send(Connection, passwd.c_str(), msg_size, NULL);
 		Sleep(1);
-	}
+
+		//cout << ret;
+	} while (ret > 0);
+
+    //closesocket(Connection);
+    //WSACleanup();
 
 	system("pause");
 	return 0;
