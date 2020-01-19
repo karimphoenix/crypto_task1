@@ -14,6 +14,7 @@ const int maxConnections = 1000;
 
 SOCKET Connections[maxConnections];
 int Counter = 0;
+int OperCode = 0;
 
 using client = tuple<unsigned int, string, string>;
 
@@ -91,16 +92,16 @@ bool CheckClient (client incomingClient, int variant){
         unsigned int icheckingID;
 
         std::tie(icheckingID, icheckingLogin, icheckingPasswd) = incomingClient;
-
+        string hashedIncomingPass;
         if  (variant = 1){
-            string hashedIncomingPass = applyHash(icheckingPasswd);
+            hashedIncomingPass = applyHash(icheckingPasswd);
             cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
             cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
         }
 
         if (variant = 2){
             icheckingPasswd = icheckingPasswd + salt;
-            string hashedIncomingPass = applyHash(icheckingPasswd);
+            hashedIncomingPass = applyHash(icheckingPasswd);
             cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
             cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
         }
@@ -139,7 +140,7 @@ void ClientHandler(int index) {
 
 		int id = atoi(cID);
 
-		if  (CheckClient(make_tuple(id, cLogin, cPasswd))){
+		if  (CheckClient(make_tuple(id, cLogin, cPasswd), OperCode)){
             send(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 			char *msg = new char[msg_size + 1];
 			msg[msg_size] = '\0';
@@ -193,7 +194,7 @@ void loadBase(string fname){
             passwd[i] = c;
         }*/
 
-        //cout << id << ' ' << login << ' ' << passwd << endl;
+        cout << id << ' ' << login << ' ' << passwd << endl;
         TableClients.emplace_back(make_tuple(id, login, passwd));
    }
 
@@ -205,17 +206,19 @@ void loadBase(string fname){
 void algorithmVar(int& variant){
     switch (variant){
 
-    case 1:{
-        loadBase("BaseHash.txt");
+        case 1:{
+            loadBase("BaseHash.txt");
+            break;
+        }
+        case 2:{
+            loadBase("BaseSalt.txt");
+            break;
+        }
 
-    }
-    case 2:{
-        loadBase("BaseSalt.txt")
-    }
-
-    case 3:{
-        loadBase("BaseLamp.txt")
-    }
+        case 3:{
+            loadBase("BaseLamp.txt");
+            break;
+        }
     }
 
 
@@ -223,26 +226,16 @@ void algorithmVar(int& variant){
 
 int main(int argc, char* argv[]) {
 
-	int OperCode = 0;
+	//int OperCode = 0;
 	cin >> OperCode;
 
 
 
-	if  (OperCode == 1){
-        cout << "Adding new user" << endl;
-        string login, passwd;
-        unsigned int clientID;
-        cin >> login;
-        cin >> passwd;
-        cin >> clientID;
-        //applyHash(passwd);
-        string ans = applyHash(passwd);
-        string ans1 = applyHash(passwd);
-
-        addClient("Base.txt", login, ans, clientID);
+	if  (OperCode == 4){
 	}   else {
 
-        loadBase("Base.txt");
+        algorithmVar(OperCode);
+        //loadBase("Base.txt");
         cout << "Base loading!" << endl;
 
         //WSAStartup
@@ -262,6 +255,7 @@ int main(int argc, char* argv[]) {
         SOCKET sListen = socket(AF_INET, SOCK_STREAM, NULL);
         bind(sListen, (SOCKADDR*)&addr, sizeof(addr));
         listen(sListen, SOMAXCONN);
+
 
         SOCKET newConnection;
         while(Counter < maxConnections + 1) {
