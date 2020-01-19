@@ -64,6 +64,7 @@ void ClientHandler() {
 int main(int argc, char* argv[]) {
 	if (argc < 3){
         cout << "Not enough arguments!";
+        system("pause");
         return 1;
 	}
 
@@ -93,6 +94,7 @@ int main(int argc, char* argv[]) {
 	Connection = socket(AF_INET, SOCK_STREAM, NULL);
 	if(connect(Connection, (SOCKADDR*)&addr, sizeof(addr)) != 0) {
 		std::cout << "Error: failed connect to server.\n";
+		system("pause");
 		return 1;
 	}
 	std::cout << "Connected!\n";
