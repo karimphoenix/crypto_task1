@@ -13,13 +13,13 @@ using namespace std;
 const int maxConnections = 1000;
 
 SOCKET Connections[maxConnections];
-int Counter = 0;
+int numberOfConnections = 0;
 int OperCode = 0;
 
 using client = tuple<unsigned int, string, string>;
 
 vector<client> TableClients;
-string salt = "GlTl";
+string salt = "QRmx";
 
 void make_digest(char *md5str, const unsigned char *digest, int len) /* {{{ */
 {
@@ -93,17 +93,17 @@ bool CheckClient (client incomingClient, int variant){
 
         std::tie(icheckingID, icheckingLogin, icheckingPasswd) = incomingClient;
         string hashedIncomingPass;
-        if  (variant = 1){
+        if  (variant == 1){
             hashedIncomingPass = applyHash(icheckingPasswd);
-            cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
-            cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
+            //cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
+            //cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
         }
 
-        if (variant = 2){
+        if (variant == 2){
             icheckingPasswd = icheckingPasswd + salt;
             hashedIncomingPass = applyHash(icheckingPasswd);
-            cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
-            cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
+            //cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
+            //cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
         }
 
 
@@ -120,22 +120,26 @@ bool CheckClient (client incomingClient, int variant){
 void ClientHandler(int index) {
 	int msg_size;
 	int ret;
+	int failedAuthorizations = 0;
 	do {
 
         ret = recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 		char *cID = new char[msg_size + 1];
 		cID[msg_size] = '\0';
 		recv(Connections[index], cID, msg_size, NULL);
+		cout << "Read id" << cID << endl;
 
 		recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 		char *cLogin = new char[msg_size + 1];
 		cLogin[msg_size] = '\0';
 		recv(Connections[index], cLogin, msg_size, NULL);
+		cout << "Read login:" << cLogin << endl;
 
 		recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 		char *cPasswd = new char[msg_size + 1];
 		cPasswd[msg_size] = '\0';
 		recv(Connections[index], cPasswd, msg_size, NULL);
+		cout << "Read password:" << cPasswd << endl;
 
 
 		int id = atoi(cID);
@@ -147,9 +151,9 @@ void ClientHandler(int index) {
 			msg = "Client connected!";
 			ret = send(Connections[index], msg, msg_size, NULL);
 
-			cout << "Client " << cLogin << " connected!" << endl;
+			cout << "Client " << cLogin << " authorized!" << endl;
 			delete[] msg;
-			//break;
+			break;
 
 		} else {
             string msg = "Wrong login or password!";
@@ -158,11 +162,11 @@ void ClientHandler(int index) {
 			//char *msg = new char[msg_size + 1];
 			//msg[msg_size] = '\0';
 			send(Connections[index], msg.c_str(), msg_size, NULL);
-
-			cout << "Client " << cLogin << " connection failed!" << endl;
+            failedAuthorizations++;
+			cout << "Client " << cLogin << " authorized failed!" << endl;
 		}
 		/*
-		for(int i = 0; i < Counter; i++) {
+		for(int i = 0; i < numberOfConnections; i++) {
 			if(i == index) {
 				continue;
 			}
@@ -173,9 +177,9 @@ void ClientHandler(int index) {
 		delete[] cPasswd;
 
 
-	} while (ret > 0);
-	//closesocket(Connections[index]);
-	//Counter--;
+	} while (failedAuthorizations < 3);
+	closesocket(Connections[index]);
+	numberOfConnections--;
 }
 
 void loadBase(string fname){
@@ -194,7 +198,7 @@ void loadBase(string fname){
             passwd[i] = c;
         }*/
 
-        cout << id << ' ' << login << ' ' << passwd << endl;
+        //cout << id << ' ' << login << ' ' << passwd << endl;
         TableClients.emplace_back(make_tuple(id, login, passwd));
    }
 
@@ -258,26 +262,31 @@ int main(int argc, char* argv[]) {
 
 
         SOCKET newConnection;
-        while(Counter < maxConnections + 1) {
+        vector<HANDLE> threads;
+        HANDLE hl;
+        while(numberOfConnections < maxConnections + 1) {
             newConnection = accept(sListen, (SOCKADDR*)&addr, &sizeofaddr);
 
             if(newConnection == 0) {
-                std::cout << "Error #2\n";
+                std::cout << "Error invalid connections!\n";
                 break;
             } else {
-                std::cout << "Client check started!\n";
+                std::cout << "New client connected!\n";
                 //std::string msg = "Hello. It`s my first network program!";
                 //int msg_size = msg.size();
                 //send(newConnection, (char*)&msg_size, sizeof(int), NULL);
                 //send(newConnection, msg.c_str(), msg_size, NULL);
 
-                Connections[Counter] = newConnection;
-                Counter++;
-                CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, (LPVOID)(Counter-1), NULL, NULL);
-                //Counter--;
-                cout << "Connections: " << Counter << endl;
+                Connections[numberOfConnections] = newConnection;
+                numberOfConnections++;
+                hl = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, (LPVOID)(numberOfConnections-1), NULL, NULL);
+                threads.push_back(hl);
+                //numberOfConnections--;
+                cout << "Number of connections: " << numberOfConnections << endl;
             }
         }
+        for (auto handle: threads)
+            WaitForSingleObject(handle, INFINITE);
 	}
 
 	WSACleanup();
