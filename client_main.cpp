@@ -48,17 +48,24 @@ string applyHash(string& incomingValue){
     return string(Hash);
 }
 
-void ClientHandler() {
+bool ClientHandler() {
 	int msg_size;
 	int ret;
-	while(ret) {
+
 		recv(Connection, (char*)&msg_size, sizeof(int), NULL);
 		char *msg = new char[msg_size + 1];
+		cout << "Message size: " << msg_size << endl;
 		msg[msg_size] = '\0';
-		ret = recv(Connection, msg, msg_size, NULL);
-		std::cout << msg << std::endl;
-		delete[] msg;
-	}
+		recv(Connection, msg, msg_size, NULL);
+		std::cout << "Message from server: " << msg << std::endl;
+		//system("pause");
+
+
+	bool result = strcmp(msg, "Client connected!") == 0;
+	delete[] msg;
+
+	return result;
+
 }
 
 int main(int argc, char* argv[]) {
@@ -97,37 +104,46 @@ int main(int argc, char* argv[]) {
 		system("pause");
 		return 1;
 	}
-	std::cout << "Connected!\n";
+	//std::cout << "Connected!\n";
 
-	CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, NULL, NULL, NULL);
+	//CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, NULL, NULL, NULL);
 
 	std::string msg1;
-	int ret;
+	int ret = 0;
 	do {
 		//std::getline(std::cin, msg1);
         sid = to_string(id);
-        cout << sid << ' ';
+
+        //cout << sid << ' ';
 		int msg_size = sizeof(sid);
 		send(Connection, (char*)&msg_size, sizeof(int), NULL);
 		send(Connection, sid.c_str(), msg_size, NULL);
+		cout << "Sent ID: " << id << endl;
 		Sleep(1);
 
 		msg_size = login.size();
 		send(Connection, (char*)&msg_size, sizeof(int), NULL);
 		send(Connection, login.c_str(), msg_size, NULL);
+		cout << "Sent Login: " << login << endl;
 		Sleep(1);
 
 		msg_size = sendingPasswd.size();
-        cout << sendingPasswd << endl;
+        //cout << sendingPasswd << endl;
 		send(Connection, (char*)&msg_size, sizeof(int), NULL);
-		ret = send(Connection, passwd.c_str(), msg_size, NULL);
+		send(Connection, passwd.c_str(), msg_size, NULL);
+		cout << "Sent password: " << passwd << endl;
 		Sleep(1);
 
+        bool result = ClientHandler();
+        if  (result)
+            break;
+        cout << "Authorized failed!" << endl;
+		ret++;
 		//cout << ret;
-	} while (ret > 0);
+	} while (ret < 3);
 
-    //closesocket(Connection);
-    //WSACleanup();
+    closesocket(Connection);
+    WSACleanup();
 
 	system("pause");
 	return 0;
