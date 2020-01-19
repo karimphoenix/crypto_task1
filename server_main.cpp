@@ -19,7 +19,7 @@ int OperCode = 0;
 using client = tuple<unsigned int, string, string>;
 
 vector<client> TableClients;
-string salt = "QRmx";
+const string salt = "QRmx";
 
 void make_digest(char *md5str, const unsigned char *digest, int len) /* {{{ */
 {
@@ -82,11 +82,13 @@ bool CheckClient (client incomingClient, int variant){
 
     //client candidate = find(TableClients.begin(), TableClients.end(), incomingClient);
 
-    for (auto cl:TableClients){
+    //for (auto cl:TableClients){
+    for (int i = 0; i < TableClients.size(); ++i){
         string checkingLogin, checkingPasswd;
         unsigned int checkingID;
 
-        std::tie(checkingID, checkingLogin, checkingPasswd) = cl;
+        //std::tie(checkingID, checkingLogin, checkingPasswd) = cl;
+        std::tie(checkingID, checkingLogin, checkingPasswd) = TableClients[i];
 
         string icheckingLogin, icheckingPasswd;
         unsigned int icheckingID;
@@ -95,20 +97,29 @@ bool CheckClient (client incomingClient, int variant){
         string hashedIncomingPass;
         if  (variant == 1){
             hashedIncomingPass = applyHash(icheckingPasswd);
-            //cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
-            //cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
         }
 
         if (variant == 2){
-            icheckingPasswd = icheckingPasswd + salt;
+            hashedIncomingPass = icheckingPasswd;
+        }
+
+        if (variant == 3){
+            hashedIncomingPass = icheckingPasswd;
+        }
+
+        if (variant == 4){
             hashedIncomingPass = applyHash(icheckingPasswd);
-            //cout << checkingID << ' ' << checkingLogin << ' ' << checkingPasswd << ' ' << checkingPasswd.size() << endl;
-            //cout << icheckingID << ' ' << icheckingLogin << ' ' << hashedIncomingPass << ' ' << hashedIncomingPass.size() << endl;
+            //TableClients[i] = make_tuple(checkingID, checkingLogin, icheckingPasswd);
         }
 
 
         if ((checkingID == icheckingID) and (checkingLogin == icheckingLogin) and (checkingPasswd == hashedIncomingPass)){
             cout << checkingLogin << " connected!" << endl;
+
+            if (variant == 4)
+               TableClients[i] = make_tuple(checkingID, checkingLogin, icheckingPasswd);
+               // checkingPasswd = icheckingPasswd;
+
             return true;
         }
 
@@ -127,33 +138,33 @@ void ClientHandler(int index) {
 		char *cID = new char[msg_size + 1];
 		cID[msg_size] = '\0';
 		recv(Connections[index], cID, msg_size, NULL);
-		cout << "Read id" << cID << endl;
+		cout << "Read id: " << cID << endl;
 
 		recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 		char *cLogin = new char[msg_size + 1];
 		cLogin[msg_size] = '\0';
 		recv(Connections[index], cLogin, msg_size, NULL);
-		cout << "Read login:" << cLogin << endl;
+		cout << "Read login: " << cLogin << endl;
 
 		recv(Connections[index], (char*)&msg_size, sizeof(int), NULL);
 		char *cPasswd = new char[msg_size + 1];
 		cPasswd[msg_size] = '\0';
 		recv(Connections[index], cPasswd, msg_size, NULL);
-		cout << "Read password:" << cPasswd << endl;
+		cout << "Read password: " << cPasswd << ' ' << msg_size << endl;
 
 
 		int id = atoi(cID);
 
 		if  (CheckClient(make_tuple(id, cLogin, cPasswd), OperCode)){
+            string msg = "Client connected!";
+            msg_size = msg.size();
             send(Connections[index], (char*)&msg_size, sizeof(int), NULL);
-			char *msg = new char[msg_size + 1];
-			msg[msg_size] = '\0';
-			msg = "Client connected!";
-			ret = send(Connections[index], msg, msg_size, NULL);
+			send(Connections[index], msg.c_str(), msg_size, NULL);
 
 			cout << "Client " << cLogin << " authorized!" << endl;
-			delete[] msg;
-			break;
+			//delete[] msg;
+			if (OperCode != 4)
+                break;
 
 		} else {
             string msg = "Wrong login or password!";
@@ -177,7 +188,7 @@ void ClientHandler(int index) {
 		delete[] cPasswd;
 
 
-	} while (failedAuthorizations < 3);
+	} while (failedAuthorizations < 5);
 	closesocket(Connections[index]);
 	numberOfConnections--;
 }
@@ -214,12 +225,18 @@ void algorithmVar(int& variant){
             loadBase("BaseHash.txt");
             break;
         }
+
         case 2:{
-            loadBase("BaseSalt.txt");
+            loadBase("BaseHash.txt");
             break;
         }
 
         case 3:{
+            loadBase("BaseSalt.txt");
+            break;
+        }
+
+        case 4:{
             loadBase("BaseLamp.txt");
             break;
         }
@@ -235,7 +252,7 @@ int main(int argc, char* argv[]) {
 
 
 
-	if  (OperCode == 4){
+	if  (OperCode == 5){
 	}   else {
 
         algorithmVar(OperCode);
@@ -262,7 +279,8 @@ int main(int argc, char* argv[]) {
 
 
         SOCKET newConnection;
-        vector<HANDLE> threads;
+        //vector<HANDLE> threads;
+        HANDLE threads[maxConnections];
         HANDLE hl;
         while(numberOfConnections < maxConnections + 1) {
             newConnection = accept(sListen, (SOCKADDR*)&addr, &sizeofaddr);
@@ -280,13 +298,13 @@ int main(int argc, char* argv[]) {
                 Connections[numberOfConnections] = newConnection;
                 numberOfConnections++;
                 hl = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandler, (LPVOID)(numberOfConnections-1), NULL, NULL);
-                threads.push_back(hl);
+                threads[numberOfConnections-1] = hl;
                 //numberOfConnections--;
                 cout << "Number of connections: " << numberOfConnections << endl;
             }
         }
-        for (auto handle: threads)
-            WaitForSingleObject(handle, INFINITE);
+        //for (auto handle: threads)
+        WaitForMultipleObjects(maxConnections, threads, TRUE, INFINITE);
 	}
 
 	WSACleanup();
